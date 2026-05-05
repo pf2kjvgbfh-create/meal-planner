@@ -6,19 +6,19 @@ import StarRating from './StarRating'
 
 interface Props {
   recipes: Recipe[]
-  category: Category | null
+  categories: Category[] | null
   excludeIds?: Set<number>
   onSelect: (recipe: Recipe) => void
   onClose: () => void
 }
 
-export default function SuggestionModal({ recipes, category, excludeIds = new Set(), onSelect, onClose }: Props) {
+export default function SuggestionModal({ recipes, categories, excludeIds = new Set(), onSelect, onClose }: Props) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'suggest' | 'search'>('suggest')
 
   const suggestions = useMemo(
-    () => suggestRecipes(recipes, category, 5, excludeIds),
-    [recipes, category, excludeIds],
+    () => suggestRecipes(recipes, categories, 5, excludeIds),
+    [recipes, categories, excludeIds],
   )
 
   const searchResults = useMemo(() => {
@@ -34,16 +34,13 @@ export default function SuggestionModal({ recipes, category, excludeIds = new Se
   const displayList = tab === 'suggest' ? suggestions : searchResults
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-0" onClick={onClose}>
-      <div
-        className="bg-white w-full max-w-lg rounded-t-3xl p-5 space-y-4 max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      <div className="p-4 space-y-4 flex flex-col flex-1 overflow-hidden">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-gray-700 text-lg">
             Выбрать блюдо
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none px-2">×</button>
         </div>
 
         <div className="flex gap-2">

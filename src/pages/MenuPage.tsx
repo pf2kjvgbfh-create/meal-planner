@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { startOfWeek, addDays, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { db, updateWeekMenu, markCooked } from '../db/database'
-import type { Recipe, DayMenu, MealSlot, WeeklyMenu } from '../types/recipe'
-import { MEAL_LABELS } from '../types/recipe'
+import type { Recipe, DayMenu, MealSlot, WeeklyMenu, Category } from '../types/recipe'
+import { MEAL_LABELS, SLOT_CATEGORIES } from '../types/recipe'
 import SuggestionModal from '../components/SuggestionModal'
 
 function getWeekStart(offset = 0): number {
@@ -22,7 +22,7 @@ export default function MenuPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset])
 
-  const [modal, setModal] = useState<{ dayIndex: number; slot: MealSlot } | null>(null)
+  const [modal, setModal] = useState<{ dayIndex: number; slot: MealSlot; categories: Category[] } | null>(null)
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
   const [menu, setMenu] = useState<WeeklyMenu | null>(null)
   const [loading, setLoading] = useState(true)
@@ -92,6 +92,7 @@ export default function MenuPage() {
       if (day.breakfast) ids.add(day.breakfast)
       if (day.lunch) ids.add(day.lunch)
       if (day.dinner) ids.add(day.dinner)
+      if (day.snack) ids.add(day.snack)
     }
     return ids
   }, [menu])
@@ -139,7 +140,7 @@ export default function MenuPage() {
               </span>
             </div>
             <div className="divide-y divide-green-50">
-              {(['breakfast', 'lunch', 'dinner'] as MealSlot[]).map((slot) => {
+              {(['breakfast', 'lunch', 'dinner', 'snack'] as MealSlot[]).map((slot) => {
                 const recipeId = day[slot]
                 const recipe = recipeId ? recipeMap[recipeId] : undefined
                 return (
@@ -157,7 +158,7 @@ export default function MenuPage() {
                       </>
                     ) : (
                       <button
-                        onClick={() => setModal({ dayIndex: i, slot })}
+                        onClick={() => setModal({ dayIndex: i, slot, categories: SLOT_CATEGORIES[slot] })}
                         className="flex-1 text-left text-sm text-green-400 hover:text-green-600 transition-colors"
                       >
                         + Выбрать блюдо
@@ -174,7 +175,7 @@ export default function MenuPage() {
       {modal && (
         <SuggestionModal
           recipes={allRecipes}
-          category={null}
+          categories={modal.categories}
           excludeIds={usedRecipeIds}
           onSelect={handleSelect}
           onClose={() => setModal(null)}

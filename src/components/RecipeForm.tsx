@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Recipe, Ingredient, Category } from '../types/recipe'
 import { CATEGORY_LABELS } from '../types/recipe'
-import { saveRecipe } from '../db/database'
+import { saveRecipe, getAllIngredientNames } from '../db/database'
 import StarRating from './StarRating'
 
 interface Props {
@@ -27,6 +27,12 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
   const [tags, setTags] = useState(initial?.tags?.join(', ') ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [knownIngredients, setKnownIngredients] = useState<string[]>([])
+  const [activeHintIndex, setActiveHintIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    getAllIngredientNames().then(setKnownIngredients)
+  }, [])
 
   function updateIngredient(i: number, field: keyof Ingredient, value: string | number) {
     setIngredients((prev) => prev.map((ing, idx) =>
@@ -136,14 +142,39 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
       <div>
         <label className="block text-sm font-medium text-green-800 mb-2">Ингредиенты</label>
         <div className="space-y-2">
-          {ingredients.map((ing, i) => (
+          {ingredients.map((ing, i) => {
+            const q = ing.name.toLowerCase().trim()
+            const hints = q.length >= 2
+              ? knownIngredients.filter((n) => n.includes(q) && n !== q).slice(0, 5)
+              : []
+            const showHints = activeHintIndex === i && hints.length > 0
+            return (
             <div key={i} className="flex gap-2 items-center">
-              <input
-                className="flex-1 border border-green-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-sm bg-white"
-                value={ing.name}
-                onChange={(e) => updateIngredient(i, 'name', e.target.value)}
-                placeholder="Говядина"
-              />
+              <div className="flex-1 relative">
+                <input
+                  className="w-full border border-green-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-sm bg-white"
+                  value={ing.name}
+                  onChange={(e) => { updateIngredient(i, 'name', e.target.value); setActiveHintIndex(i) }}
+                  onFocus={() => setActiveHintIndex(i)}
+                  onBlur={() => setTimeout(() => setActiveHintIndex(null), 150)}
+                  placeholder="Говядина"
+                />
+                {showHints && (
+                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+                    {hints.map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { updateIngredient(i, 'name', h); setActiveHintIndex(null) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 capitalize"
+                      >
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <input
                 type="number"
                 min="0"
@@ -169,7 +200,8 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
                 </button>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
         <button
           type="button"

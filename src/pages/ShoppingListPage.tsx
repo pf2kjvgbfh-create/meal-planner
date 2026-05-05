@@ -68,6 +68,7 @@ export default function ShoppingListPage() {
       if (day.breakfast) usedIds.add(day.breakfast)
       if (day.lunch) usedIds.add(day.lunch)
       if (day.dinner) usedIds.add(day.dinner)
+      if (day.snack) usedIds.add(day.snack)
     }
     const recipes = [...usedIds].map((id) => recipeMap[id]).filter(Boolean)
     return aggregateIngredients(recipes)

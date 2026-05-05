@@ -29,12 +29,12 @@ export function scoreRecipe(recipe: Recipe, excludeIds: Set<number> = new Set())
 
 export function suggestRecipes(
   recipes: Recipe[],
-  category: Category | null,
+  categories: Category[] | null,
   count = 5,
   excludeIds: Set<number> = new Set(),
 ): Recipe[] {
   return recipes
-    .filter((r) => category === null || r.category === category)
+    .filter((r) => categories === null || categories.includes(r.category))
     .map((r) => ({ recipe: r, score: scoreRecipe(r, excludeIds) }))
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score)

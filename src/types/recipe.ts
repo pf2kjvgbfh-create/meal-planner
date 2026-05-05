@@ -28,12 +28,21 @@ export interface Recipe {
   createdAt: number
 }
 
-export type MealSlot = 'breakfast' | 'lunch' | 'dinner'
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
 export const MEAL_LABELS: Record<MealSlot, string> = {
   breakfast: 'Завтрак',
   lunch: 'Обед',
   dinner: 'Ужин',
+  snack: 'Перекус',
+}
+
+// Какие категории рецептов предлагать для каждого приёма пищи
+export const SLOT_CATEGORIES: Record<MealSlot, Category[]> = {
+  breakfast: ['breakfast', 'dessert'],
+  lunch: ['soup', 'main', 'salad'],
+  dinner: ['main', 'salad'],
+  snack: ['dessert', 'salad', 'snack'],
 }
 
 export interface DayMenu {
@@ -41,6 +50,7 @@ export interface DayMenu {
   breakfast?: number
   lunch?: number
   dinner?: number
+  snack?: number
 }
 
 export interface WeeklyMenu {

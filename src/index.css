@@ -26,6 +26,11 @@ body {
   display: none;
 }
 
+/* Предотвращаем зум на iOS при фокусе на инпут */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
 /* Безопасный отступ снизу для iPhone */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);

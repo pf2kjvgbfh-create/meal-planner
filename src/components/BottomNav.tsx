@@ -4,11 +4,12 @@ const TABS = [
   { to: '/', label: 'Меню', icon: '📅' },
   { to: '/recipes', label: 'Рецепты', icon: '📖' },
   { to: '/shopping', label: 'Покупки', icon: '🛒' },
+  { to: '/settings', label: 'Ещё', icon: '⚙️' },
 ]
 
 export default function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-green-100 flex safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex safe-bottom">
       {TABS.map((tab) => (
         <NavLink
           key={tab.to}

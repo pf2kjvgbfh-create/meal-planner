@@ -38,7 +38,7 @@ export async function markCooked(recipeId: number): Promise<void> {
   const now = Date.now()
   await db.recipes.update(recipeId, {
     lastCooked: now,
-    cookCount: (await db.recipes.get(recipeId))?.cookCount ?? 0 + 1,
+    cookCount: ((await db.recipes.get(recipeId))?.cookCount ?? 0) + 1,
   })
   await db.cookHistory.add({ recipeId, cookedAt: now })
 }
@@ -56,4 +56,46 @@ export async function getOrCreateWeekMenu(weekStart: number): Promise<WeeklyMenu
 
 export async function updateWeekMenu(menu: WeeklyMenu): Promise<void> {
   await db.weeklyMenus.put(menu)
+}
+
+// === Экспорт / Импорт данных ===
+
+export async function exportAllData(): Promise<string> {
+  const recipes = await db.recipes.toArray()
+  const weeklyMenus = await db.weeklyMenus.toArray()
+  const cookHistory = await db.cookHistory.toArray()
+  return JSON.stringify({ recipes, weeklyMenus, cookHistory, exportedAt: Date.now() }, null, 2)
+}
+
+export async function importAllData(json: string): Promise<{ recipes: number; menus: number }> {
+  const data = JSON.parse(json)
+  let recipesCount = 0
+  let menusCount = 0
+
+  if (data.recipes?.length) {
+    await db.recipes.clear()
+    await db.recipes.bulkAdd(data.recipes)
+    recipesCount = data.recipes.length
+  }
+  if (data.weeklyMenus?.length) {
+    await db.weeklyMenus.clear()
+    await db.weeklyMenus.bulkAdd(data.weeklyMenus)
+    menusCount = data.weeklyMenus.length
+  }
+  if (data.cookHistory?.length) {
+    await db.cookHistory.clear()
+    await db.cookHistory.bulkAdd(data.cookHistory)
+  }
+  return { recipes: recipesCount, menus: menusCount }
+}
+
+export async function getAllIngredientNames(): Promise<string[]> {
+  const recipes = await db.recipes.toArray()
+  const names = new Set<string>()
+  for (const r of recipes) {
+    for (const ing of r.ingredients) {
+      names.add(ing.name.toLowerCase().trim())
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'ru'))
 }

@@ -3,6 +3,7 @@ import BottomNav from './components/BottomNav'
 import MenuPage from './pages/MenuPage'
 import RecipesPage from './pages/RecipesPage'
 import ShoppingListPage from './pages/ShoppingListPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
           <Route path="/" element={<MenuPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
           <Route path="/shopping" element={<ShoppingListPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
       <BottomNav />
