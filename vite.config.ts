@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
     tailwindcss(),
@@ -17,7 +18,7 @@ export default defineConfig({
         short_name: 'Меню',
         description: 'Планирование меню на неделю и список покупок',
         theme_color: '#86efac',
-        background_color: '#f0fdf4',
+        background_color: '#f8faf8',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
