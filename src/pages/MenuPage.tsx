@@ -2,15 +2,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { startOfWeek, addDays, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { db, updateWeekMenu, markCooked } from '../db/database'
-import type { Recipe, DayMenu, MealSlot, WeeklyMenu, Category } from '../types/recipe'
+import type { Recipe, DayMenu, MealSlot, WeeklyMenu } from '../types/recipe'
 import { MEAL_LABELS } from '../types/recipe'
 import SuggestionModal from '../components/SuggestionModal'
-
-const MEAL_TO_CATEGORY: Record<MealSlot, Category> = {
-  breakfast: 'breakfast',
-  lunch: 'soup',
-  dinner: 'main',
-}
 
 function getWeekStart(offset = 0): number {
   const d = startOfWeek(addDays(new Date(), offset * 7), { weekStartsOn: 1 })
@@ -91,6 +85,17 @@ export default function MenuPage() {
     return `${format(start, 'd MMM', { locale: ru })} – ${format(end, 'd MMM', { locale: ru })}`
   }, [weekStart])
 
+  const usedRecipeIds = useMemo(() => {
+    if (!menu) return new Set<number>()
+    const ids = new Set<number>()
+    for (const day of menu.days) {
+      if (day.breakfast) ids.add(day.breakfast)
+      if (day.lunch) ids.add(day.lunch)
+      if (day.dinner) ids.add(day.dinner)
+    }
+    return ids
+  }, [menu])
+
   if (loading || !menu) {
     return <div className="p-4 text-center text-green-400">Загрузка...</div>
   }
@@ -98,7 +103,7 @@ export default function MenuPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-green-800">Меню</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Меню</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setWeekOffset((o) => o - 1)}
@@ -128,8 +133,8 @@ export default function MenuPage() {
       <div className="space-y-3">
         {menu.days.map((day: DayMenu, i: number) => (
           <div key={day.date} className="bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
-            <div className="bg-green-50 px-4 py-2 border-b border-green-100">
-              <span className="font-semibold text-green-800 text-sm capitalize">
+            <div className="bg-stone-50 px-4 py-2 border-b border-stone-100">
+              <span className="font-semibold text-gray-800 text-sm capitalize">
                 {format(new Date(day.date), 'EEEE, d MMMM', { locale: ru })}
               </span>
             </div>
@@ -169,7 +174,8 @@ export default function MenuPage() {
       {modal && (
         <SuggestionModal
           recipes={allRecipes}
-          category={MEAL_TO_CATEGORY[modal.slot]}
+          category={null}
+          excludeIds={usedRecipeIds}
           onSelect={handleSelect}
           onClose={() => setModal(null)}
         />

@@ -7,7 +7,7 @@ import ShoppingListPage from './pages/ShoppingListPage'
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-green-50 pb-20">
+      <div className="min-h-screen bg-stone-50 pb-20">
         <Routes>
           <Route path="/" element={<MenuPage />} />
           <Route path="/recipes" element={<RecipesPage />} />

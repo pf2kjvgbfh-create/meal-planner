@@ -6,16 +6,20 @@ import StarRating from './StarRating'
 
 interface Props {
   recipes: Recipe[]
-  category: Category
+  category: Category | null
+  excludeIds?: Set<number>
   onSelect: (recipe: Recipe) => void
   onClose: () => void
 }
 
-export default function SuggestionModal({ recipes, category, onSelect, onClose }: Props) {
+export default function SuggestionModal({ recipes, category, excludeIds = new Set(), onSelect, onClose }: Props) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'suggest' | 'search'>('suggest')
 
-  const suggestions = useMemo(() => suggestRecipes(recipes, category, 5), [recipes, category])
+  const suggestions = useMemo(
+    () => suggestRecipes(recipes, category, 5, excludeIds),
+    [recipes, category, excludeIds],
+  )
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -36,8 +40,8 @@ export default function SuggestionModal({ recipes, category, onSelect, onClose }
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-green-800 text-lg">
-            Выбрать блюдо · {CATEGORY_LABELS[category]}
+          <h3 className="font-bold text-gray-700 text-lg">
+            Выбрать блюдо
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
@@ -49,7 +53,7 @@ export default function SuggestionModal({ recipes, category, onSelect, onClose }
               tab === 'suggest' ? 'bg-green-500 text-white' : 'bg-green-100 text-green-700'
             }`}
           >
-            ✨ Предложения
+            Предложения
           </button>
           <button
             onClick={() => setTab('search')}
@@ -57,7 +61,7 @@ export default function SuggestionModal({ recipes, category, onSelect, onClose }
               tab === 'search' ? 'bg-green-500 text-white' : 'bg-green-100 text-green-700'
             }`}
           >
-            🔍 Поиск
+            Поиск
           </button>
         </div>
 
@@ -74,7 +78,7 @@ export default function SuggestionModal({ recipes, category, onSelect, onClose }
         <div className="overflow-y-auto flex-1 space-y-2">
           {tab === 'suggest' && suggestions.length === 0 && (
             <p className="text-center text-gray-400 py-8">
-              Нет рецептов в категории «{CATEGORY_LABELS[category]}»
+              Нет доступных рецептов. Добавьте рецепты в разделе «Рецепты».
             </p>
           )}
           {tab === 'search' && !search && (
@@ -86,7 +90,12 @@ export default function SuggestionModal({ recipes, category, onSelect, onClose }
               onClick={() => onSelect(recipe)}
               className="w-full text-left bg-green-50 hover:bg-green-100 rounded-xl p-3 transition-colors"
             >
-              <div className="font-medium text-gray-800 text-sm">{recipe.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-800 text-sm">{recipe.name}</span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                  {CATEGORY_LABELS[recipe.category]}
+                </span>
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <StarRating value={recipe.rating} readonly />
                 {recipe.lastCooked ? (
