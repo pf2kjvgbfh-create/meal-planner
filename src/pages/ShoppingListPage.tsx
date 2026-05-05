@@ -1,15 +1,13 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { startOfWeek, addDays, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { db, getOrCreateWeekMenu } from '../db/database'
-import type { Recipe, Ingredient } from '../types/recipe'
+import { db } from '../db/database'
+import type { Recipe, WeeklyMenu } from '../types/recipe'
 
 interface ShoppingItem {
   name: string
   amount: number
   unit: string
-  checked: boolean
 }
 
 function getWeekStart(offset = 0): number {
@@ -35,7 +33,6 @@ function aggregateIngredients(recipes: Recipe[]): ShoppingItem[] {
       name: key.split('::')[0],
       amount: val.amount,
       unit: val.unit,
-      checked: false,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 }
@@ -45,18 +42,27 @@ export default function ShoppingListPage() {
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset])
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
   const [copied, setCopied] = useState(false)
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
+  const [menu, setMenu] = useState<WeeklyMenu | null>(null)
 
-  const allRecipes = useLiveQuery(() => db.recipes.toArray(), [])
-  const menu = useLiveQuery(() => getOrCreateWeekMenu(weekStart), [weekStart])
+  useEffect(() => {
+    async function load() {
+      const recipes = await db.recipes.toArray()
+      setAllRecipes(recipes)
+      const m = await db.weeklyMenus.where('weekStart').equals(weekStart).first()
+      setMenu(m ?? null)
+    }
+    load()
+  }, [weekStart])
 
   const recipeMap = useMemo(() => {
     const map: Record<number, Recipe> = {}
-    allRecipes?.forEach((r) => { if (r.id) map[r.id] = r })
+    allRecipes.forEach((r) => { if (r.id) map[r.id] = r })
     return map
   }, [allRecipes])
 
   const shoppingList = useMemo(() => {
-    if (!menu || !allRecipes) return []
+    if (!menu) return []
     const usedIds = new Set<number>()
     for (const day of menu.days) {
       if (day.breakfast) usedIds.add(day.breakfast)
@@ -65,7 +71,7 @@ export default function ShoppingListPage() {
     }
     const recipes = [...usedIds].map((id) => recipeMap[id]).filter(Boolean)
     return aggregateIngredients(recipes)
-  }, [menu, recipeMap, allRecipes])
+  }, [menu, recipeMap])
 
   const weekLabel = useMemo(() => {
     const start = new Date(weekStart)
@@ -133,7 +139,6 @@ export default function ShoppingListPage() {
             </button>
           </div>
 
-          {/* Прогресс-бар */}
           <div className="h-2 bg-green-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-400 rounded-full transition-all"
@@ -141,7 +146,6 @@ export default function ShoppingListPage() {
             />
           </div>
 
-          {/* Не купленное */}
           <div className="space-y-2">
             {unchecked.map((item) => (
               <button
@@ -156,7 +160,6 @@ export default function ShoppingListPage() {
             ))}
           </div>
 
-          {/* Купленное */}
           {checked.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Куплено</p>

@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { db, deleteRecipe } from '../db/database'
 import type { Recipe, Category } from '../types/recipe'
 import { CATEGORY_LABELS } from '../types/recipe'
@@ -12,17 +11,14 @@ export default function RecipesPage() {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<Category | 'all'>('all')
   const [searchMode, setSearchMode] = useState<'name' | 'ingredient'>('name')
-  const [ratings, setRatings] = useState<Record<number, number>>({})
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
 
-  const allRecipes = useLiveQuery(() => db.recipes.orderBy('name').toArray(), [])
+  const loadRecipes = useCallback(async () => {
+    const recipes = await db.recipes.orderBy('name').toArray()
+    setAllRecipes(recipes)
+  }, [])
 
-  useEffect(() => {
-    if (allRecipes) {
-      const map: Record<number, number> = {}
-      allRecipes.forEach((r) => { if (r.id) map[r.id] = r.rating })
-      setRatings(map)
-    }
-  }, [allRecipes])
+  useEffect(() => { loadRecipes() }, [loadRecipes])
 
   const filtered = useMemo(() => {
     if (!allRecipes) return []
@@ -50,6 +46,7 @@ export default function RecipesPage() {
   async function handleDelete(id: number) {
     if (confirm('Удалить этот рецепт?')) {
       await deleteRecipe(id)
+      loadRecipes()
     }
   }
 
@@ -61,6 +58,7 @@ export default function RecipesPage() {
   function handleFormClose() {
     setShowForm(false)
     setEditingRecipe(undefined)
+    loadRecipes()
   }
 
   if (showForm) {
@@ -155,9 +153,7 @@ export default function RecipesPage() {
       </div>
 
       {/* Список */}
-      {!allRecipes ? (
-        <div className="text-center text-green-400 py-8">Загрузка...</div>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="text-center py-12 space-y-3">
           <div className="text-5xl">🥗</div>
           <p className="text-gray-500">
@@ -172,10 +168,10 @@ export default function RecipesPage() {
           {filtered.map((recipe) => (
             <RecipeCard
               key={recipe.id}
-              recipe={{ ...recipe, rating: recipe.id ? (ratings[recipe.id] ?? recipe.rating) : recipe.rating }}
+              recipe={recipe}
               onEdit={() => handleEdit(recipe)}
               onDelete={() => recipe.id && handleDelete(recipe.id)}
-              onRatingChange={(id, r) => setRatings((prev) => ({ ...prev, [id]: r }))}
+              onRatingChange={() => loadRecipes()}
             />
           ))}
         </div>
