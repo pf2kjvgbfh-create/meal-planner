@@ -33,6 +33,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleUpdate() {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg) {
+        await reg.update()
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+        }
+      }
+    }
+    window.location.reload()
+  }
+
   return (
     <div className="p-4 space-y-6">
       <h1 className="text-2xl font-bold text-gray-800">Настройки</h1>
@@ -48,7 +61,7 @@ export default function SettingsPage() {
           onClick={handleExport}
           className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors"
         >
-          📥 Скачать резервную копию
+          Скачать резервную копию
         </button>
 
         <div className="border-t border-stone-100 pt-4 space-y-3">
@@ -71,9 +84,23 @@ export default function SettingsPage() {
         )}
       </div>
 
+      <div className="bg-white rounded-2xl border border-stone-200 p-4 space-y-4">
+        <h2 className="font-semibold text-gray-700">Обновление</h2>
+        <p className="text-sm text-gray-500">
+          Проверить и установить новую версию приложения.
+          Рецепты и меню сохранятся.
+        </p>
+        <button
+          onClick={handleUpdate}
+          className="w-full bg-stone-100 hover:bg-stone-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors"
+        >
+          Проверить обновления
+        </button>
+      </div>
+
       <div className="text-center text-xs text-gray-400 space-y-1">
-        <p>Планировщик меню v1.0</p>
-        <p>Данные хранятся локально в браузере</p>
+        <p>Планировщик меню v1.1</p>
+        <p>Данные хранятся локально на устройстве</p>
       </div>
     </div>
   )
