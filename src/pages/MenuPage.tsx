@@ -4,10 +4,12 @@ import { ru } from 'date-fns/locale'
 import { db, updateWeekMenu, markCooked } from '../db/database'
 import type { Recipe, DayMenu, MealSlot, WeeklyMenu, Category } from '../types/recipe'
 import { MEAL_LABELS, SLOT_CATEGORIES } from '../types/recipe'
+import { normalizeDayMenu, MEAL_SLOTS, getSlotIds } from '../utils/menuUtils'
 import SuggestionModal from '../components/SuggestionModal'
 
 function getWeekStart(offset = 0): number {
-  const d = startOfWeek(addDays(new Date(), offset * 7), { weekStartsOn: 1 })
+  // weekStartsOn: 0 = Sunday
+  const d = startOfWeek(addDays(new Date(), offset * 7), { weekStartsOn: 0 })
   d.setHours(0, 0, 0, 0)
   return d.getTime()
 }
@@ -18,11 +20,18 @@ function buildEmptyDays(weekStart: number): DayMenu[] {
   }))
 }
 
+interface ModalState {
+  dayIndex: number
+  slot: MealSlot
+  categories: Category[]
+  priorityIds: Set<number>
+}
+
 export default function MenuPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset])
 
-  const [modal, setModal] = useState<{ dayIndex: number; slot: MealSlot; categories: Category[] } | null>(null)
+  const [modal, setModal] = useState<ModalState | null>(null)
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
   const [menu, setMenu] = useState<WeeklyMenu | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +51,9 @@ export default function MenuPage() {
         }
         newMenu.id = await db.weeklyMenus.add(newMenu)
         existing = newMenu
+      } else {
+        // normalize legacy number slots → arrays
+        existing = { ...existing, days: existing.days.map(normalizeDayMenu) }
       }
       setMenu(existing)
     } finally {
@@ -60,7 +72,13 @@ export default function MenuPage() {
   async function handleSelect(recipe: Recipe) {
     if (!modal || !menu) return
     const days = [...menu.days]
-    days[modal.dayIndex] = { ...days[modal.dayIndex], [modal.slot]: recipe.id }
+    const day = { ...days[modal.dayIndex] }
+    const existing = day[modal.slot] ?? []
+    // avoid duplicate in same slot
+    if (!existing.includes(recipe.id!)) {
+      day[modal.slot] = [...existing, recipe.id!]
+    }
+    days[modal.dayIndex] = day
     const updated = { ...menu, days }
     await updateWeekMenu(updated)
     await markCooked(recipe.id!)
@@ -68,15 +86,34 @@ export default function MenuPage() {
     setModal(null)
   }
 
-  async function handleClear(dayIndex: number, slot: MealSlot) {
+  async function handleRemoveDish(dayIndex: number, slot: MealSlot, recipeId: number) {
     if (!menu) return
     const days = [...menu.days]
     const day = { ...days[dayIndex] }
-    delete day[slot]
+    const current = day[slot] ?? []
+    const next = current.filter((id) => id !== recipeId)
+    if (next.length === 0) {
+      delete day[slot]
+    } else {
+      day[slot] = next
+    }
     days[dayIndex] = day
     const updated = { ...menu, days }
     await updateWeekMenu(updated)
     setMenu(updated)
+  }
+
+  function openModal(dayIndex: number, slot: MealSlot) {
+    if (!menu) return
+    // Yesterday = previous day in the week array (or empty if it's day 0)
+    const priorityIds = new Set<number>()
+    if (dayIndex > 0) {
+      const yesterday = menu.days[dayIndex - 1]
+      for (const id of yesterday[slot] ?? []) {
+        priorityIds.add(id)
+      }
+    }
+    setModal({ dayIndex, slot, categories: SLOT_CATEGORIES[slot], priorityIds })
   }
 
   const weekLabel = useMemo(() => {
@@ -85,16 +122,10 @@ export default function MenuPage() {
     return `${format(start, 'd MMM', { locale: ru })} – ${format(end, 'd MMM', { locale: ru })}`
   }, [weekStart])
 
+  // All used IDs across the whole week (for exclude in suggestions)
   const usedRecipeIds = useMemo(() => {
     if (!menu) return new Set<number>()
-    const ids = new Set<number>()
-    for (const day of menu.days) {
-      if (day.breakfast) ids.add(day.breakfast)
-      if (day.lunch) ids.add(day.lunch)
-      if (day.dinner) ids.add(day.dinner)
-      if (day.snack) ids.add(day.snack)
-    }
-    return ids
+    return getSlotIds(menu.days)
   }, [menu])
 
   if (loading || !menu) {
@@ -140,30 +171,36 @@ export default function MenuPage() {
               </span>
             </div>
             <div className="divide-y divide-green-50">
-              {(['breakfast', 'lunch', 'dinner', 'snack'] as MealSlot[]).map((slot) => {
-                const recipeId = day[slot]
-                const recipe = recipeId ? recipeMap[recipeId] : undefined
+              {MEAL_SLOTS.map((slot) => {
+                const ids = day[slot] ?? []
                 return (
-                  <div key={slot} className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-xs text-gray-400 w-14 shrink-0">{MEAL_LABELS[slot]}</span>
-                    {recipe ? (
-                      <>
-                        <span className="flex-1 text-sm text-gray-700 font-medium">{recipe.name}</span>
+                  <div key={slot} className="px-4 py-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs text-gray-400 w-14 shrink-0 pt-0.5">{MEAL_LABELS[slot]}</span>
+                      <div className="flex-1 space-y-1">
+                        {ids.map((recipeId) => {
+                          const recipe = recipeMap[recipeId]
+                          if (!recipe) return null
+                          return (
+                            <div key={recipeId} className="flex items-center gap-2">
+                              <span className="flex-1 text-sm text-gray-700 font-medium">{recipe.name}</span>
+                              <button
+                                onClick={() => handleRemoveDish(i, slot, recipeId)}
+                                className="text-gray-300 hover:text-red-400 text-lg leading-none shrink-0"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )
+                        })}
                         <button
-                          onClick={() => handleClear(i, slot)}
-                          className="text-gray-300 hover:text-red-400 text-lg leading-none shrink-0"
+                          onClick={() => openModal(i, slot)}
+                          className="text-sm text-green-400 hover:text-green-600 transition-colors"
                         >
-                          ×
+                          + {ids.length === 0 ? 'Выбрать блюдо' : 'Добавить блюдо'}
                         </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setModal({ dayIndex: i, slot, categories: SLOT_CATEGORIES[slot] })}
-                        className="flex-1 text-left text-sm text-green-400 hover:text-green-600 transition-colors"
-                      >
-                        + Выбрать блюдо
-                      </button>
-                    )}
+                      </div>
+                    </div>
                   </div>
                 )
               })}
@@ -177,6 +214,7 @@ export default function MenuPage() {
           recipes={allRecipes}
           categories={modal.categories}
           excludeIds={usedRecipeIds}
+          priorityIds={modal.priorityIds}
           onSelect={handleSelect}
           onClose={() => setModal(null)}
         />

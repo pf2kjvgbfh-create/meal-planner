@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Recipe, Ingredient, Category } from '../types/recipe'
 import { CATEGORY_LABELS } from '../types/recipe'
 import { saveRecipe, getAllIngredientNames } from '../db/database'
@@ -25,14 +25,24 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
   )
   const [rating, setRating] = useState(initial?.rating ?? 0)
   const [tags, setTags] = useState(initial?.tags?.join(', ') ?? '')
+  const [photo, setPhoto] = useState<string | undefined>(initial?.photo)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [knownIngredients, setKnownIngredients] = useState<string[]>([])
   const [activeHintIndex, setActiveHintIndex] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     getAllIngredientNames().then(setKnownIngredients)
   }, [])
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => setPhoto(ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
 
   function updateIngredient(i: number, field: keyof Ingredient, value: string | number) {
     setIngredients((prev) => prev.map((ing, idx) =>
@@ -82,6 +92,7 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
         cookCount: initial?.cookCount ?? 0,
         tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
         createdAt: initial?.createdAt ?? Date.now(),
+        photo,
       }
       const id = await saveRecipe(recipe)
       onSaved({ ...recipe, id })
@@ -99,6 +110,50 @@ export default function RecipeForm({ initial, onSaved, onCancel }: Props) {
           {error}
         </div>
       )}
+
+      {/* Фото */}
+      <div>
+        <label className="block text-sm font-medium text-green-800 mb-1">Фото блюда</label>
+        <div className="flex items-center gap-3">
+          {photo ? (
+            <div className="relative">
+              <img
+                src={photo}
+                alt="Фото блюда"
+                className="w-20 h-20 object-cover rounded-xl border border-green-100"
+              />
+              <button
+                type="button"
+                onClick={() => { setPhoto(undefined); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-green-200 flex items-center justify-center text-green-400 hover:border-green-400 cursor-pointer transition-colors text-2xl"
+            >
+              📷
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="text-sm text-green-600 hover:text-green-800 font-medium"
+          >
+            {photo ? 'Изменить фото' : 'Выбрать фото'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoChange}
+          />
+        </div>
+      </div>
 
       {/* Название */}
       <div>

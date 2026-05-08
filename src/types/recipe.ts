@@ -26,6 +26,7 @@ export interface Recipe {
   cookCount: number
   tags: string[]
   createdAt: number
+  photo?: string      // base64 dataURL
 }
 
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
@@ -47,15 +48,15 @@ export const SLOT_CATEGORIES: Record<MealSlot, Category[]> = {
 
 export interface DayMenu {
   date: number  // timestamp, start of day
-  breakfast?: number
-  lunch?: number
-  dinner?: number
-  snack?: number
+  breakfast?: number[]
+  lunch?: number[]
+  dinner?: number[]
+  snack?: number[]
 }
 
 export interface WeeklyMenu {
   id?: number
-  weekStart: number  // timestamp, Monday
+  weekStart: number  // timestamp, Sunday
   days: DayMenu[]
   createdAt: number
 }
@@ -64,4 +65,12 @@ export interface CookHistory {
   id?: number
   recipeId: number
   cookedAt: number  // timestamp
+}
+
+export interface CustomShoppingItem {
+  id?: number
+  weekStart: number  // which week this item belongs to
+  name: string
+  checked: boolean
+  createdAt: number
 }

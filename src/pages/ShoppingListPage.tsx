@@ -1,8 +1,16 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { startOfWeek, addDays, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { db } from '../db/database'
-import type { Recipe, WeeklyMenu } from '../types/recipe'
+import {
+  db,
+  getCustomShoppingItems,
+  addCustomShoppingItem,
+  toggleCustomShoppingItem,
+  deleteCustomShoppingItem,
+} from '../db/database'
+import type { Recipe, WeeklyMenu, CustomShoppingItem } from '../types/recipe'
+import { normalizeDayMenu } from '../utils/menuUtils'
+import { getSlotIds } from '../utils/menuUtils'
 
 interface ShoppingItem {
   name: string
@@ -11,7 +19,8 @@ interface ShoppingItem {
 }
 
 function getWeekStart(offset = 0): number {
-  const d = startOfWeek(addDays(new Date(), offset * 7), { weekStartsOn: 1 })
+  // weekStartsOn: 0 = Sunday
+  const d = startOfWeek(addDays(new Date(), offset * 7), { weekStartsOn: 0 })
   d.setHours(0, 0, 0, 0)
   return d.getTime()
 }
@@ -44,13 +53,21 @@ export default function ShoppingListPage() {
   const [copied, setCopied] = useState(false)
   const [allRecipes, setAllRecipes] = useState<Recipe[]>([])
   const [menu, setMenu] = useState<WeeklyMenu | null>(null)
+  const [customItems, setCustomItems] = useState<CustomShoppingItem[]>([])
+  const [newItemName, setNewItemName] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
       const recipes = await db.recipes.toArray()
       setAllRecipes(recipes)
       const m = await db.weeklyMenus.where('weekStart').equals(weekStart).first()
-      setMenu(m ?? null)
+      if (m) {
+        setMenu({ ...m, days: m.days.map(normalizeDayMenu) })
+      } else {
+        setMenu(null)
+      }
+      setCustomItems(await getCustomShoppingItems(weekStart))
     }
     load()
   }, [weekStart])
@@ -63,13 +80,7 @@ export default function ShoppingListPage() {
 
   const shoppingList = useMemo(() => {
     if (!menu) return []
-    const usedIds = new Set<number>()
-    for (const day of menu.days) {
-      if (day.breakfast) usedIds.add(day.breakfast)
-      if (day.lunch) usedIds.add(day.lunch)
-      if (day.dinner) usedIds.add(day.dinner)
-      if (day.snack) usedIds.add(day.snack)
-    }
+    const usedIds = getSlotIds(menu.days)
     const recipes = [...usedIds].map((id) => recipeMap[id]).filter(Boolean)
     return aggregateIngredients(recipes)
   }, [menu, recipeMap])
@@ -80,25 +91,55 @@ export default function ShoppingListPage() {
     return `${format(start, 'd MMM', { locale: ru })} – ${format(end, 'd MMM', { locale: ru })}`
   }, [weekStart])
 
-  function toggleItem(name: string) {
+  function toggleItem(key: string) {
     setCheckedItems((prev) => {
       const next = new Set(prev)
-      next.has(name) ? next.delete(name) : next.add(name)
+      next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
   }
 
+  async function handleToggleCustom(item: CustomShoppingItem) {
+    await toggleCustomShoppingItem(item.id!, !item.checked)
+    setCustomItems((prev) => prev.map((i) => i.id === item.id ? { ...i, checked: !i.checked } : i))
+  }
+
+  async function handleDeleteCustom(id: number) {
+    await deleteCustomShoppingItem(id)
+    setCustomItems((prev) => prev.filter((i) => i.id !== id))
+  }
+
+  async function handleAddCustom(e: React.FormEvent) {
+    e.preventDefault()
+    const name = newItemName.trim()
+    if (!name) return
+    const item = await addCustomShoppingItem(weekStart, name)
+    setCustomItems((prev) => [...prev, item])
+    setNewItemName('')
+    inputRef.current?.focus()
+  }
+
+  const totalCount = shoppingList.length + customItems.length
+  const checkedCount = shoppingList.filter((i) => checkedItems.has(i.name)).length +
+    customItems.filter((i) => i.checked).length
+
   const copyText = useCallback(() => {
-    const text = shoppingList
+    const recipeLines = shoppingList
       .map((i) => `${checkedItems.has(i.name) ? '✓' : '○'} ${i.name} — ${i.amount} ${i.unit}`)
       .join('\n')
-    navigator.clipboard.writeText(`Список покупок (${weekLabel}):\n\n${text}`)
+    const customLines = customItems
+      .map((i) => `${i.checked ? '✓' : '○'} ${i.name}`)
+      .join('\n')
+    const body = [recipeLines, customLines].filter(Boolean).join('\n')
+    navigator.clipboard.writeText(`Список покупок (${weekLabel}):\n\n${body}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [shoppingList, checkedItems, weekLabel])
+  }, [shoppingList, customItems, checkedItems, weekLabel])
 
-  const unchecked = shoppingList.filter((i) => !checkedItems.has(i.name))
-  const checked = shoppingList.filter((i) => checkedItems.has(i.name))
+  const uncheckedRecipe = shoppingList.filter((i) => !checkedItems.has(i.name))
+  const checkedRecipe = shoppingList.filter((i) => checkedItems.has(i.name))
+  const uncheckedCustom = customItems.filter((i) => !i.checked)
+  const checkedCustom = customItems.filter((i) => i.checked)
 
   return (
     <div className="p-4 space-y-4">
@@ -121,16 +162,35 @@ export default function ShoppingListPage() {
         </div>
       </div>
 
-      {shoppingList.length === 0 ? (
+      {/* Add custom item */}
+      <form onSubmit={handleAddCustom} className="flex gap-2">
+        <input
+          ref={inputRef}
+          className="flex-1 border border-green-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+          placeholder="Добавить покупку..."
+          value={newItemName}
+          onChange={(e) => setNewItemName(e.target.value)}
+          style={{ fontSize: '16px' }}
+        />
+        <button
+          type="submit"
+          disabled={!newItemName.trim()}
+          className="px-4 py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-green-200 text-white rounded-xl text-sm font-medium transition-colors"
+        >
+          +
+        </button>
+      </form>
+
+      {totalCount === 0 ? (
         <div className="text-center py-12 space-y-3">
           <div className="text-5xl">🛒</div>
-          <p className="text-gray-500">Меню на эту неделю пустое.<br />Сначала составьте меню.</p>
+          <p className="text-gray-500">Список пуст.<br />Составьте меню или добавьте покупки выше.</p>
         </div>
       ) : (
         <>
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              {unchecked.length} из {shoppingList.length} позиций осталось
+              {totalCount - checkedCount} из {totalCount} позиций осталось
             </p>
             <button
               onClick={copyText}
@@ -143,28 +203,58 @@ export default function ShoppingListPage() {
           <div className="h-2 bg-green-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-400 rounded-full transition-all"
-              style={{ width: `${(checked.length / shoppingList.length) * 100}%` }}
+              style={{ width: totalCount > 0 ? `${(checkedCount / totalCount) * 100}%` : '0%' }}
             />
           </div>
 
-          <div className="space-y-2">
-            {unchecked.map((item) => (
-              <button
-                key={item.name}
-                onClick={() => toggleItem(item.name)}
-                className="w-full flex items-center gap-3 bg-white border border-green-100 rounded-xl px-4 py-3 hover:bg-green-50 transition-colors text-left"
-              >
-                <span className="w-5 h-5 rounded-full border-2 border-green-300 shrink-0" />
-                <span className="flex-1 text-sm font-medium text-gray-800 capitalize">{item.name}</span>
-                <span className="text-sm text-gray-400">{item.amount} {item.unit}</span>
-              </button>
-            ))}
-          </div>
+          {/* Unchecked recipe ingredients */}
+          {uncheckedRecipe.length > 0 && (
+            <div className="space-y-2">
+              {uncheckedRecipe.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => toggleItem(item.name)}
+                  className="w-full flex items-center gap-3 bg-white border border-green-100 rounded-xl px-4 py-3 hover:bg-green-50 transition-colors text-left"
+                >
+                  <span className="w-5 h-5 rounded-full border-2 border-green-300 shrink-0" />
+                  <span className="flex-1 text-sm font-medium text-gray-800 capitalize">{item.name}</span>
+                  <span className="text-sm text-gray-400">{item.amount} {item.unit}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
-          {checked.length > 0 && (
+          {/* Unchecked custom items */}
+          {uncheckedCustom.length > 0 && (
+            <div className="space-y-2">
+              {uncheckedRecipe.length > 0 && (
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Своё</p>
+              )}
+              {uncheckedCustom.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleCustom(item)}
+                    className="flex-1 flex items-center gap-3 bg-white border border-green-100 rounded-xl px-4 py-3 hover:bg-green-50 transition-colors text-left"
+                  >
+                    <span className="w-5 h-5 rounded-full border-2 border-green-300 shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-gray-800">{item.name}</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCustom(item.id!)}
+                    className="text-gray-300 hover:text-red-400 text-lg px-2 shrink-0"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Checked items */}
+          {(checkedRecipe.length > 0 || checkedCustom.length > 0) && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Куплено</p>
-              {checked.map((item) => (
+              {checkedRecipe.map((item) => (
                 <button
                   key={item.name}
                   onClick={() => toggleItem(item.name)}
@@ -175,12 +265,33 @@ export default function ShoppingListPage() {
                   <span className="text-sm text-gray-300">{item.amount} {item.unit}</span>
                 </button>
               ))}
+              {checkedCustom.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleCustom(item)}
+                    className="flex-1 flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <span className="w-5 h-5 rounded-full bg-green-400 shrink-0 flex items-center justify-center text-white text-xs">✓</span>
+                    <span className="flex-1 text-sm text-gray-400 line-through">{item.name}</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCustom(item.id!)}
+                    className="text-gray-200 hover:text-red-400 text-lg px-2 shrink-0"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
-          {checked.length > 0 && (
+          {(checkedRecipe.length > 0 || checkedCustom.length > 0) && (
             <button
-              onClick={() => setCheckedItems(new Set())}
+              onClick={() => {
+                setCheckedItems(new Set())
+                setCustomItems((prev) => prev.map((i) => ({ ...i, checked: false })))
+                customItems.forEach((i) => { if (i.checked) toggleCustomShoppingItem(i.id!, false) })
+              }}
               className="w-full text-sm text-gray-400 hover:text-gray-600 py-2 text-center"
             >
               Снять все отметки

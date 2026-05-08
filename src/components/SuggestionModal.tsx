@@ -8,17 +8,25 @@ interface Props {
   recipes: Recipe[]
   categories: Category[] | null
   excludeIds?: Set<number>
+  priorityIds?: Set<number>
   onSelect: (recipe: Recipe) => void
   onClose: () => void
 }
 
-export default function SuggestionModal({ recipes, categories, excludeIds = new Set(), onSelect, onClose }: Props) {
+export default function SuggestionModal({
+  recipes,
+  categories,
+  excludeIds = new Set(),
+  priorityIds = new Set(),
+  onSelect,
+  onClose,
+}: Props) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'suggest' | 'search'>('suggest')
 
   const suggestions = useMemo(
-    () => suggestRecipes(recipes, categories, 5, excludeIds),
-    [recipes, categories, excludeIds],
+    () => suggestRecipes(recipes, categories, 5, excludeIds, priorityIds),
+    [recipes, categories, excludeIds, priorityIds],
   )
 
   const searchResults = useMemo(() => {
@@ -81,30 +89,42 @@ export default function SuggestionModal({ recipes, categories, excludeIds = new 
           {tab === 'search' && !search && (
             <p className="text-center text-gray-400 py-8">Введите название или ингредиент</p>
           )}
-          {displayList.map((recipe) => (
-            <button
-              key={recipe.id}
-              onClick={() => onSelect(recipe)}
-              className="w-full text-left bg-green-50 hover:bg-green-100 rounded-xl p-3 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-800 text-sm">{recipe.name}</span>
-                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                  {CATEGORY_LABELS[recipe.category]}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <StarRating value={recipe.rating} readonly />
-                {recipe.lastCooked ? (
-                  <span className="text-xs text-gray-400">
-                    {Math.floor((Date.now() - recipe.lastCooked) / 86400000)} дн. назад
+          {displayList.map((recipe) => {
+            const isPriority = recipe.id !== undefined && priorityIds.has(recipe.id)
+            return (
+              <button
+                key={recipe.id}
+                onClick={() => onSelect(recipe)}
+                className={`w-full text-left rounded-xl p-3 transition-colors ${
+                  isPriority
+                    ? 'bg-amber-50 hover:bg-amber-100 border border-amber-200'
+                    : 'bg-green-50 hover:bg-green-100'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-800 text-sm">{recipe.name}</span>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                    {CATEGORY_LABELS[recipe.category]}
                   </span>
-                ) : (
-                  <span className="text-xs text-green-500">Ещё не готовили</span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {isPriority && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                      вчера
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <StarRating value={recipe.rating} readonly />
+                  {recipe.lastCooked ? (
+                    <span className="text-xs text-gray-400">
+                      {Math.floor((Date.now() - recipe.lastCooked) / 86400000)} дн. назад
+                    </span>
+                  ) : (
+                    <span className="text-xs text-green-500">Ещё не готовили</span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>

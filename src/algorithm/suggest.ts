@@ -27,17 +27,27 @@ export function scoreRecipe(recipe: Recipe, excludeIds: Set<number> = new Set())
   return dayScore * 0.4 + ratingScore * 0.3 + varietyBonus * 0.2 + random * 0.1
 }
 
+/**
+ * Suggest recipes sorted by score.
+ * priorityIds: recipes that appear first regardless of score (e.g. yesterday's same-slot dish).
+ * excludeIds: recipes completely excluded from results.
+ */
 export function suggestRecipes(
   recipes: Recipe[],
   categories: Category[] | null,
   count = 5,
   excludeIds: Set<number> = new Set(),
+  priorityIds: Set<number> = new Set(),
 ): Recipe[] {
-  return recipes
+  const filtered = recipes
     .filter((r) => categories === null || categories.includes(r.category))
     .map((r) => ({ recipe: r, score: scoreRecipe(r, excludeIds) }))
     .filter((x) => x.score >= 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, count)
-    .map((x) => x.recipe)
+
+  const priority = filtered.filter((x) => x.recipe.id !== undefined && priorityIds.has(x.recipe.id!))
+  const rest = filtered.filter((x) => x.recipe.id === undefined || !priorityIds.has(x.recipe.id!))
+
+  rest.sort((a, b) => b.score - a.score)
+
+  return [...priority.map((x) => x.recipe), ...rest.map((x) => x.recipe)].slice(0, count)
 }
